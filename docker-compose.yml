@@ -1,0 +1,215 @@
+name: sentinelai
+
+services:
+  postgres:
+    profiles: ["legacy-primary"]
+    build: ./deploy/postgres
+    environment:
+      POSTGRES_ROLE: primary
+      POSTGRES_USER: ${POSTGRES_USER:-sentinel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentinel}
+      POSTGRES_DB: ${POSTGRES_DB:-sentinel}
+      REPLICATION_USER: replicator
+      REPLICATION_PASSWORD: sentinel
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - data
+
+  postgres-standby:
+    build: ./deploy/postgres
+    environment:
+      POSTGRES_ROLE: standby
+      PRIMARY_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-sentinel}
+      POSTGRES_DB: ${POSTGRES_DB:-sentinel}
+      REPLICATION_USER: replicator
+      REPLICATION_PASSWORD: sentinel
+    volumes:
+      - postgres_standby_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    networks:
+      - data
+
+  postgres-restore:
+    image: postgres:16
+    profiles: ["restore"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sentinel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentinel}
+      POSTGRES_DB: ${POSTGRES_DB:-sentinel}
+    volumes:
+      - postgres_restore_data:/var/lib/postgresql/data
+    networks:
+      - data
+
+  redis:
+    image: redis:7
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_ERLANG_COOKIE: sentinel-lab-cookie
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-sentinel}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-sentinel}
+    ports:
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+    networks:
+      - broker
+
+  rabbitmq-2:
+    image: rabbitmq:3-management
+    hostname: rabbitmq-2
+    environment:
+      RABBITMQ_ERLANG_COOKIE: sentinel-lab-cookie
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-sentinel}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-sentinel}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+    networks:
+      - broker
+
+  rabbitmq-3:
+    image: rabbitmq:3-management
+    hostname: rabbitmq-3
+    environment:
+      RABBITMQ_ERLANG_COOKIE: sentinel-lab-cookie
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-sentinel}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-sentinel}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+    networks:
+      - broker
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    environment:
+      SERVICE_NAME: api
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:-sentinel}@${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DB:-sentinel}
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-sentinel}:${RABBITMQ_DEFAULT_PASS:-sentinel}@rabbitmq:5672/%2F
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-30}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres-standby:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - edge
+      - app
+      - data
+      - broker
+
+  orchestrator:
+    build: ./services/orchestrator
+    environment:
+      SERVICE_NAME: orchestrator
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:-sentinel}@${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DB:-sentinel}
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-sentinel}:${RABBITMQ_DEFAULT_PASS:-sentinel}@rabbitmq:5672/%2F
+      AGENT_URL: http://agent:8000/analyze
+      AGENT_TIMEOUT_SECONDS: ${AGENT_TIMEOUT_SECONDS:-60}
+    ports:
+      - "127.0.0.1:8001:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - app
+      - data
+      - broker
+
+  agent:
+    build: ./services/agent
+    environment:
+      SERVICE_NAME: agent
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://127.0.0.1:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:7b}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-60}
+    ports:
+      - "127.0.0.1:8002:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - app
+
+networks:
+  edge:
+    name: sentinelai_edge
+    driver_opts:
+      com.docker.network.bridge.name: sntl_edge
+  app:
+    name: sentinelai_app
+    driver_opts:
+      com.docker.network.bridge.name: sntl_app
+  data:
+    name: sentinelai_data
+    driver_opts:
+      com.docker.network.bridge.name: sntl_data
+  broker:
+    name: sentinelai_broker
+    driver_opts:
+      com.docker.network.bridge.name: sntl_broker
+
+volumes:
+  postgres_data:
+  postgres_standby_data:
+  postgres_restore_data:

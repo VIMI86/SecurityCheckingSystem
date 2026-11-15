@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SentinelAI</title>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="logo" href="/ui/">Sentinel<span>AI</span></a>
+    <nav class="bar-side">
+      <div id="checks" class="checks" aria-live="polite"></div>
+      <button id="theme" type="button" class="theme" aria-label="Сменить тему">Тёмная</button>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <p class="eyebrow">Контролируемый разбор событий</p>
+    <h1>Смотри, как проходит задача.</h1>
+    <p class="lead">Событие идёт по цепочке. Модель только предлагает разбор. Решение о действии остаётся отдельным шагом.</p>
+  </section>
+
+  <section class="canvas" aria-label="Схема обработки">
+    <ol id="flow" class="flow">
+      <li data-step="event">Событие</li>
+      <li data-step="analyst">Analyst</li>
+      <li data-step="security">Security</li>
+      <li data-step="policy">Policy</li>
+      <li data-step="result">Результат</li>
+    </ol>
+  </section>
+
+  <main>
+    <section class="card">
+      <h2>Новый запуск</h2>
+      <form id="create-form">
+        <label>
+          Тип события
+          <input id="event-type" name="event_type" value="ids_alert" required maxlength="100">
+        </label>
+        <label>
+          Входные данные
+          <textarea id="payload" name="payload" rows="7" spellcheck="false">{
+  "src": "10.0.0.8",
+  "msg": "ET SCAN"
+}</textarea>
+        </label>
+        <p id="form-error" class="error" hidden></p>
+        <button type="submit">Запустить</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <h2>Запуски</h2>
+        <button id="refresh" type="button" class="ghost">Обновить</button>
+      </div>
+      <ul id="tasks" class="tasks"></ul>
+    </section>
+
+    <section class="card detail-card">
+      <h2>Прогон</h2>
+      <div id="detail" class="detail">Выберите запуск, чтобы открыть шаги и журнал.</div>
+    </section>
+  </main>
+  <script src="/ui/app.js"></script>
+</body>
+</html>
