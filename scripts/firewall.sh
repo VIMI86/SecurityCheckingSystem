@@ -32,7 +32,8 @@ ip_of() {
 }
 
 collect_env() {
-  local api orch agent postgres redis rabbit
+  local api orch agent postgres redis rabbit name id
+  local data_ips=() broker_ips=()
   api="$(cid api)"
   orch="$(cid orchestrator)"
   agent="$(cid agent)"
@@ -44,8 +45,19 @@ collect_env() {
     echo "стек не запущен: сначала ./scripts/demo-stage4-5.sh" >&2
     exit 1
   fi
-  export API_BROKER_IP="$(ip_of "$api" sentinelai_broker)"
-  export API_DATA_IP="$(ip_of "$api" sentinelai_data)"
+  for name in api api-2 api-3; do
+    id="$(cid "$name")"
+    if [[ -z "$id" ]]; then
+      echo "нет контейнера $name" >&2
+      exit 1
+    fi
+    data_ips+=("$(ip_of "$id" sentinelai_data)")
+    broker_ips+=("$(ip_of "$id" sentinelai_broker)")
+  done
+  export API_DATA_IPS="$(IFS=,; echo "${data_ips[*]}")"
+  export API_BROKER_IPS="$(IFS=,; echo "${broker_ips[*]}")"
+  export API_BROKER_IP="${broker_ips[0]}"
+  export API_DATA_IP="${data_ips[0]}"
   export ORCH_BROKER_IP="$(ip_of "$orch" sentinelai_broker)"
   export ORCH_DATA_IP="$(ip_of "$orch" sentinelai_data)"
   export ORCH_APP_IP="$(ip_of "$orch" sentinelai_app)"
@@ -69,7 +81,8 @@ collect_env() {
 
 run_fw() {
   docker run --rm --network host --cap-add NET_ADMIN --cap-add NET_RAW \
-    -e API_BROKER_IP -e API_DATA_IP -e ORCH_BROKER_IP -e ORCH_DATA_IP -e ORCH_APP_IP \
+    -e API_BROKER_IP -e API_DATA_IP -e API_BROKER_IPS -e API_DATA_IPS \
+    -e ORCH_BROKER_IP -e ORCH_DATA_IP -e ORCH_APP_IP \
     -e AGENT_IP -e POSTGRES_IP -e POSTGRES_STANDBY_IP -e REDIS_IP -e RABBIT_IP \
     "$IMAGE" "$@"
 }

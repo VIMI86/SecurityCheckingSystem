@@ -36,7 +36,7 @@ join_node rabbitmq-2
 join_node rabbitmq-3
 docker compose exec -T rabbitmq rabbitmqctl cluster_status
 
-docker compose up -d --build --no-deps --force-recreate api orchestrator
+docker compose up -d --build --no-deps --force-recreate api api-2 api-3 orchestrator
 for _ in $(seq 1 30); do
   curl -fsS http://127.0.0.1:8000/ready >/dev/null 2>&1 && break
   sleep 1

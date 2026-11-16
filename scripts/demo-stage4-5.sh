@@ -39,11 +39,11 @@ for _ in $(seq 1 40); do
 done
 join_rabbit rabbitmq-2
 join_rabbit rabbitmq-3
-docker compose up -d api orchestrator
+docker compose up -d api api-2 api-3 haproxy orchestrator
 
 echo "==== Firewall под текущие адреса ===="
 ./scripts/firewall.sh apply
-docker compose restart api orchestrator
+docker compose restart api api-2 api-3 haproxy orchestrator
 
 for _ in $(seq 1 40); do
   if curl -fsS http://127.0.0.1:8000/ready >/dev/null 2>&1 \

@@ -46,7 +46,7 @@ if grep -q '^POSTGRES_HOST=' .env; then
 else
   printf '\nPOSTGRES_HOST=postgres-standby\n' >> .env
 fi
-docker compose up -d --no-deps --force-recreate api orchestrator
+docker compose up -d --no-deps --force-recreate api api-2 api-3 orchestrator
 echo "обновляю firewall под новые адреса контейнеров"
 "$(dirname "${BASH_SOURCE[0]}")/firewall.sh" apply
 ready="no"

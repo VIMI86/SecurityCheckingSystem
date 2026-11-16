@@ -67,7 +67,7 @@ curl -fsS -X POST http://127.0.0.1:8000/tasks \
   -d '{"event_type":"ids_alert","payload":{"src":"10.0.0.8","msg":"ET SCAN"}}'
 ```
 
-Порты API, Orchestrator и Agent открыты только на `127.0.0.1`: `8000`, `8001` и `8002`. Панель RabbitMQ — `http://127.0.0.1:15672`. PostgreSQL и Redis наружу не публикуются. Пароль учебной базы и брокера по умолчанию `sentinel`. Файл `.env` в git не входит.
+Клиентский порт `127.0.0.1:8000` принимает HAProxy и распределяет запросы между тремя экземплярами API. Orchestrator и Agent открыты на `127.0.0.1:8001` и `127.0.0.1:8002`. Статистика балансировщика — `http://127.0.0.1:8404/stats`. Панель RabbitMQ — `http://127.0.0.1:15672`. PostgreSQL и Redis наружу не публикуются. Пароль учебной базы и брокера по умолчанию `sentinel`. Файл `.env` в git не входит. Отчёт о балансировке и результат прогона — в [docs/load-balancing.md](docs/load-balancing.md).
 
 Остановка: `docker compose down`. Том PostgreSQL при этом сохраняется.
 

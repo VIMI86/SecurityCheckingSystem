@@ -114,36 +114,66 @@ services:
     networks:
       - broker
 
-  api:
+  api: &api
     build:
       context: .
       dockerfile: services/api/Dockerfile
-    environment:
-      SERVICE_NAME: api
+    environment: &api-env
+      SERVICE_NAME: api-1
       DATABASE_URL: postgresql://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:-sentinel}@${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DB:-sentinel}
       REDIS_URL: redis://redis:6379/0
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-sentinel}:${RABBITMQ_DEFAULT_PASS:-sentinel}@rabbitmq:5672/%2F
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-30}
-    ports:
-      - "127.0.0.1:8000:8000"
-    depends_on:
+    depends_on: &api-depends
       postgres-standby:
         condition: service_healthy
       redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    healthcheck:
+    healthcheck: &api-health
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: &api-networks
+      - edge
+      - app
+      - data
+      - broker
+
+  api-2:
+    <<: *api
+    environment:
+      <<: *api-env
+      SERVICE_NAME: api-2
+
+  api-3:
+    <<: *api
+    environment:
+      <<: *api-env
+      SERVICE_NAME: api-3
+
+  haproxy:
+    build: ./deploy/haproxy
+    ports:
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8404:8404"
+    depends_on:
+      api:
+        condition: service_healthy
+      api-2:
+        condition: service_healthy
+      api-3:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
       interval: 5s
       timeout: 3s
       retries: 12
     networks:
       - edge
-      - app
-      - data
-      - broker
 
   orchestrator:
     build: ./services/orchestrator
@@ -160,6 +190,10 @@ services:
       rabbitmq:
         condition: service_healthy
       api:
+        condition: service_healthy
+      api-2:
+        condition: service_healthy
+      api-3:
         condition: service_healthy
       agent:
         condition: service_healthy

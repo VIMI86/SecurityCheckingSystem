@@ -11,6 +11,7 @@ import redis
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.types import Scope
 from pydantic import BaseModel, Field, field_validator
 
 from app import db
@@ -128,10 +129,17 @@ async def lifespan(app: FastAPI):
     yield
 
 
+class UiFiles(StaticFiles):
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 app = FastAPI(title="SentinelAI API", version="0.2.0", lifespan=lifespan)
 app.mount(
     "/ui",
-    StaticFiles(directory=Path(__file__).parent / "static", html=True),
+    UiFiles(directory=Path(__file__).parent / "static", html=True),
     name="ui",
 )
 
